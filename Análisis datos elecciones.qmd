@@ -18,11 +18,17 @@ library(tidyverse)
 
 ```{r}
 # NO TOQUES NADA
-election_data <- read_csv(file = "./data/datos_elecciones_brutos.csv")
-cod_mun <- read_csv(file = "./data/cod_mun.csv")
-surveys <- read_csv(file = "./data/historical_surveys.csv")
-abbrev <- read_csv(file = "./data/siglas.csv")
+election_data <- read_csv(file = "./data/datos_elecciones_brutos.csv") #archivo con las elecciones al congreso
+cod_mun <- read_csv(file = "./data/cod_mun.csv") #archivo con los códigos y nombres de cada municipio
+surveys <- read_csv(file = "./data/historical_surveys.csv") #siglas de cada partido
+abbrev <- read_csv(file = "./data/siglas.csv") #encuestas electorales desde 1982.
 ```
+
+
+```{r}
+
+```
+
 
 ------------------------------------------------------------------------
 
@@ -115,3 +121,9 @@ election_data_tidy <-
   distinct(id_elec, siglas, .keep_all = TRUE)
 election_data_tidy
 ```
+
+
+```{r}
+
+```
+
