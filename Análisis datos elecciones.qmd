@@ -117,13 +117,7 @@ election_data_tidy
 ```
 
 
-<<<<<<< HEAD
 ```{r}
-#hoola
-=======
-
-```{r}
-#hola
->>>>>>> main
+#miau
 ```
 
