@@ -1,23 +1,14 @@
 ---
 title: "Análisis datos elecciones"
-format: revealjs
-editor: visual
+format:
+  revealjs:
+    theme: [style.scss]
+    embed-resources: true
+execute: 
+  echo: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished presentation. To learn more about Quarto presentations see <https://quarto.org/docs/presentations/>.
-
-## Bullets
-
-When you click the **Render** button a document will be generated that includes:
-
--   Content authored with markdown
--   Output from executable code
-
-## Code
-
-When you click the **Render** button a presentation will be generated that includes both content and the output of embedded code. You can embed code like this:
+## Análisis datos elecciones
 
 ```{r}
 rm(list = ls())
@@ -31,4 +22,96 @@ election_data <- read_csv(file = "./data/datos_elecciones_brutos.csv")
 cod_mun <- read_csv(file = "./data/cod_mun.csv")
 surveys <- read_csv(file = "./data/historical_surveys.csv")
 abbrev <- read_csv(file = "./data/siglas.csv")
+```
+
+------------------------------------------------------------------------
+
+## 1. Depuración del conjunto *election_data*
+
+Primeramente vamos a depurar y trabajar con el conjunto *election_data*. Esto conlleva la organización de los datos, comprobación que el tipo de dato de cada variable sea el adecuado, manejo de los ausentes, etc.
+
+```{r}
+election_data_tidy <-
+  election_data |> 
+  pivot_longer(cols = -c(tipo_eleccion:votos_nulos),
+               names_to = "partidos", values_to = "votos",
+               values_drop_na = TRUE) |> 
+  # tenemos algunas lógicas que deberían ser números
+  mutate(across(where(is.logical), as.numeric))
+
+election_data_tidy
+```
+
+------------------------------------------------------------------------
+
+Como sabemos, en estadística información = varianza por tanto hay variables que debemos eliminar y para ello primero observamos la cantidad de valores distintos que hay en cada variable para después eliminar aquellas que presenten valores constantes, es decir, que el número de valores distintos sea igual a uno.
+
+En este caso, estas variables son tipo_elección, vuelta y codigo_distrito_electoral.
+
+Además, vamos a añadir una variable fecha considerando que todas las elecciones han sido realizadas el 1 de enero
+
+```{r}
+#1º Sacamos los valores distintos de cada variable
+n_dist <-
+  election_data_tidy |> 
+  summarise(across(everything(), n_distinct)) #recorremos todas las variables y sacamos los valores distintos
+n_dist
+
+#2º Seleccionamos todas las variables menos las que no nos aportaban información
+election_data_tidy <-
+  election_data_tidy |> 
+  select(-c(tipo_eleccion, vuelta, codigo_distrito_electoral))
+election_data_tidy
+
+#3º Añadimos la variable fecha
+library(glue)
+election_data_tidy <-
+  election_data_tidy |> 
+  mutate("fecha" = as_date(glue("{anno}-{mes}-01")), .before = everything()) |> 
+  select(-anno, -mes)
+election_data_tidy
+```
+
+------------------------------------------------------------------------
+
+Ahora vamos a crear la variable id para poder realizar de manera más rápida y eficiente el borrado de duplicados por municipio, fecha electoral y partido
+
+```{r}
+election_data_tidy <-
+  election_data_tidy |> 
+  mutate("id_mun" = glue("{codigo_ccaa}_{codigo_provincia}_{codigo_municipio}"),
+         "id_elec" = glue("{fecha}_{id_mun}"), .after = fecha) |> 
+  mutate("id_result" = glue("{id_elec}_{partidos}"), .before = everything()) |> 
+  distinct(id_result, .keep_all = TRUE)
+election_data_tidy
+```
+
+------------------------------------------------------------------------
+
+Además, necesitamos seleccionar sólo aquellos partidos que nos nos interesan. Pero para ello debemos tener en cuenta que hay partido que tienen o tenían federaciones, sucursales con otros nombres por lo que es necesario recategorizarlos
+
+```{r}
+election_data_tidy <-
+  election_data_tidy |> 
+  mutate("siglas" = 
+           case_when(str_detect(partidos, "SOCIALISTA|SOCIALISTES") ~ "PSOE",
+                     str_detect(partidos, "PARTIDO POPULAR") ~ "PP",
+                     str_detect(partidos, "CIUDADANOS|CIUDADANÍA|CIUDADANIA|CIUTADANS") ~ "CS",
+                     str_detect(partidos, "PARTIDO NACIONALISTA VASCO|EUZKO") ~ "PNV",
+                     str_detect(partidos, "BLOQUE NACIONALISTA GALEGO") ~ "BNG",
+                     str_detect(partidos, "PODEMOS|IZQUIERDA UNIDA|EZKER BATUA|PODEMOS|PODEM|ELKARREKIN") ~ "UP",
+                     str_detect(partidos, "ESQUERRA REPUBLICANA DE CAT") ~ "ERC",
+                     str_detect(partidos, "BILDU|SORTU|EUSKO ALKARTASUNA|ARALAR|ALTERNATIBA") ~ "EH-BILDU",
+                     str_detect(partidos, "MÁS PAÍS|MAS PAIS|MÁS PAIS|MAS PAÍS") ~ "MP",
+                     str_detect(partidos, "VOX") ~ "VOX",
+                     TRUE ~ "OTROS"))
+
+election_data_tidy <-
+  election_data_tidy |> 
+  # hago mutate porqueno quiero perder el resto de info
+  mutate("votos" = sum(votos, na.rm = TRUE), .by = c(id_elec, siglas)) |> 
+  # pero entonces ahora si PACMA + PCE suman 200 votos, tendré
+  # en ese municpio y fecha (id_elec) dos filas para OTROS con el mismo valor (200)
+  distinct(id_elec, siglas, .keep_all = TRUE)
+election_data_tidy
 ```
