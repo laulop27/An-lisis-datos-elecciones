@@ -115,3 +115,9 @@ election_data_tidy <-
   distinct(id_elec, siglas, .keep_all = TRUE)
 election_data_tidy
 ```
+
+
+```{r}
+#hoola
+```
+
