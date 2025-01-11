@@ -118,6 +118,6 @@ election_data_tidy
 
 
 ```{r}
-#hoolaaa
+#hoola
 ```
 
