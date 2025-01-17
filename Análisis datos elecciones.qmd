@@ -1,5 +1,6 @@
 ---
-title: "Análisis datos elecciones"
+title: "Entrega grupal"
+author: "Laura López (05977509-Q), Cristina Martínez (54023153-V), Marta Calderón (06639048-Y), Marina Parra (54216596-F), Verónica Yebra (02783997-P), Maria Suárez (51191582-E), Julia García (49959082-T)"
 format:
   revealjs:
     theme: [style.scss]
@@ -18,10 +19,10 @@ library(tidyverse)
 
 ```{r}
 # NO TOQUES NADA
-election_data <- read_csv(file = "./data/datos_elecciones_brutos.csv")
-cod_mun <- read_csv(file = "./data/cod_mun.csv")
-surveys <- read_csv(file = "./data/historical_surveys.csv")
-abbrev <- read_csv(file = "./data/siglas.csv")
+election_data <- read_csv(file = "./data/datos_elecciones_brutos.csv") #archivo con las elecciones al congreso
+cod_mun <- read_csv(file = "./data/cod_mun.csv") #archivo con los códigos y nombres de cada municipio
+surveys <- read_csv(file = "./data/historical_surveys.csv") #siglas de cada partido
+abbrev <- read_csv(file = "./data/siglas.csv") #encuestas electorales desde 1982.
 ```
 
 ------------------------------------------------------------------------
@@ -91,33 +92,83 @@ election_data_tidy
 Además, necesitamos seleccionar sólo aquellos partidos que nos nos interesan. Pero para ello debemos tener en cuenta que hay partido que tienen o tenían federaciones, sucursales con otros nombres por lo que es necesario recategorizarlos
 
 ```{r}
+abbrev
+election_data_tidy <- 
+  election_data_tidy |> 
+  left_join(abbrev, by = c("partidos"="denominacion")) |> 
+  mutate(siglas = str_to_upper(siglas))
+  
 election_data_tidy <-
   election_data_tidy |> 
-  mutate("siglas" = 
-           case_when(str_detect(partidos, "SOCIALISTA|SOCIALISTES") ~ "PSOE",
-                     str_detect(partidos, "PARTIDO POPULAR") ~ "PP",
-                     str_detect(partidos, "CIUDADANOS|CIUDADANÍA|CIUDADANIA|CIUTADANS") ~ "CS",
-                     str_detect(partidos, "PARTIDO NACIONALISTA VASCO|EUZKO") ~ "PNV",
-                     str_detect(partidos, "BLOQUE NACIONALISTA GALEGO") ~ "BNG",
-                     str_detect(partidos, "PODEMOS|IZQUIERDA UNIDA|EZKER BATUA|PODEMOS|PODEM|ELKARREKIN") ~ "UP",
-                     str_detect(partidos, "ESQUERRA REPUBLICANA DE CAT") ~ "ERC",
-                     str_detect(partidos, "BILDU|SORTU|EUSKO ALKARTASUNA|ARALAR|ALTERNATIBA") ~ "EH-BILDU",
-                     str_detect(partidos, "MÁS PAÍS|MAS PAIS|MÁS PAIS|MAS PAÍS") ~ "MP",
-                     str_detect(partidos, "VOX") ~ "VOX",
-                     TRUE ~ "OTROS"))
-
-election_data_tidy <-
-  election_data_tidy |> 
-  # hago mutate porqueno quiero perder el resto de info
   mutate("votos" = sum(votos, na.rm = TRUE), .by = c(id_elec, siglas)) |> 
-  # pero entonces ahora si PACMA + PCE suman 200 votos, tendré
-  # en ese municpio y fecha (id_elec) dos filas para OTROS con el mismo valor (200)
   distinct(id_elec, siglas, .keep_all = TRUE)
 election_data_tidy
 ```
 
-
 ```{r}
-#hoola
+election_data_tidy <- 
+  election_data_tidy |> 
+  mutate(siglas = str_replace_all(siglas, "\\.", ""))
+election_data_tidy
 ```
 
+```{r}
+election_data_tidy <- 
+  election_data_tidy |> 
+  mutate(siglas = str_replace_all(siglas, "\\,|\\'", ""))
+election_data_tidy
+```
+
+```{r}
+election_data_tidy |> 
+  distinct(siglas)
+```
+
+```{r}
+election_data_tidy <- 
+  election_data_tidy |> 
+  mutate(siglas = ifelse(str_detect(siglas, "PAÍS"), "MP", siglas))
+election_data_tidy
+```
+
+```{r}
+election_data_tidy <- 
+  election_data_tidy |>
+  mutate("siglas" =
+           case_when(str_detect(siglas, "PSOE") ~ "PSOE",
+                     str_detect(siglas, "PP") ~ "PP",
+                     str_detect(siglas, "CS") ~ "CS",
+                     str_detect(siglas, "PNV") ~ "PNV",
+                     str_detect(siglas, "BNG") ~ "BNG",
+                     str_detect(siglas, "PODEMOS") ~ "PODEMOS",
+                     str_detect(siglas, "ERC|ESQUERRA") ~ "ERC",
+                     str_detect(siglas, "BILDU") ~ "BILDU",
+                     str_detect(siglas, "MP") ~ "MP",
+                     str_detect(siglas, "VOX") ~ "VOX",
+                     str_detect(siglas, "CIU") ~ "CIU",
+                     TRUE ~ "OTROS"))
+```
+
+## 2. Depuración del conjunto *surveys*
+
+Debes descartar las encuestas que: - se refieran a elecciones anteriores a 2008 - sean a pie de urna - tamaño muestral desconocido o inferior a 500. - tenga 1 día o menos de trabajo de campo.
+
+```{r}
+surveys <- surveys |> 
+  filter(year(date_elec) >= 2008 & 
+           exit_poll == FALSE &
+           size > 500 &
+           as.numeric(difftime(field_date_to, field_date_from, units = "days")) > 1) |> 
+  drop_na(size)
+surveys
+```
+
+```{r}
+surveys_tidy <- 
+surveys |> 
+  pivot_longer(cols = -c(1:10),
+               names_to = "partidos",
+               values_to = "votos",
+               values_drop_na = TRUE)
+surveys_tidy
+```
